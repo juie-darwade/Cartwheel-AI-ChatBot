@@ -296,24 +296,27 @@ def find_order(ctx: AuthContext, query: str) -> dict[str, Any]:
     """
     with db.connection() as conn:
         if ctx.role == "shopper":
-            orders = db.list_orders_for_user(conn, ctx.user_id, limit=1000)
+            candidates = db.list_order_search_candidates(conn, user_id=ctx.user_id)
         elif ctx.role == "merchant":
-            orders = db.list_orders_for_store(conn, ctx.store_id, limit=1000)
-        else:  # support: search across every order
-            rows = conn.execute(
-                "SELECT * FROM orders ORDER BY ordered_at DESC, id DESC LIMIT 1000"
-            ).fetchall()
-            orders = [db._order_from_row(row) for row in rows]
+            candidates = db.list_order_search_candidates(conn, store_id=ctx.store_id)
+        elif ctx.role == "support":
+            candidates = db.list_order_search_candidates(conn, all_orders=True)
+        else:
+            return {
+                "ok": False,
+                "error": "invalid_argument",
+                "reason": f"unsupported role for find_order: {ctx.role!r}",
+            }
 
         product_titles = {p.id: p.title for p in db.list_products(conn)}
 
-    scored = []
-    for order in orders:
+    matches = []
+    for order in candidates:
         title = product_titles.get(order.product_id, "")
         score = fuzz.partial_ratio(query.lower(), title.lower())
         if score >= FUZZY_MATCH_THRESHOLD:
-            scored.append((score, order))
+            matches.append(order)
+            if len(matches) == 5:
+                break
 
-    scored.sort(key=lambda pair: (-pair[0], pair[1].id))
-    top_orders = [order.to_public_dict() for _, order in scored[:5]]
-    return {"ok": True, "orders": top_orders}
+    return {"ok": True, "orders": [order.to_public_dict() for order in matches]}
