@@ -38,7 +38,7 @@ from opentelemetry import trace
 from pydantic import BaseModel
 
 from agent import db
-from agent.agent import build_agent, prompt_version
+from agent.agent import build_agent, prompt_version, render_system_prompt
 from agent.auth import ROLES, AuthContext
 from agent.config import REPO_ROOT, db_path
 from observability.instrument import load_env, setup_tracing
